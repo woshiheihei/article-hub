@@ -1,0 +1,10 @@
+{
+  "title": "长时运行 agent 的高效 harness（执行框架）",
+  "kind": "markdown",
+  "source": "translate/effective-harnesses-for-long-running-agents-zh-CN/translation.md",
+  "updated_at": "2026-03-29 21:50 CST",
+  "files": [
+    "translation.md",
+    "effective-harnesses-for-long-running-agents-zh-cn-long.png"
+  ]
+}
