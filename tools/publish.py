@@ -142,7 +142,7 @@ def excerpt_from_text(text: str, limit: int = 180) -> str:
     plain = re.sub(r'```[\s\S]*?```', ' ', text)
     plain = re.sub(r'`([^`]+)`', r'\1', plain)
     plain = re.sub(r'!\[[^\]]*\]\([^)]+\)', ' ', plain)
-    plain = re.sub(r'\[[^\]]+\]\([^)]+\)', r'\1', plain)
+    plain = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', plain)
     plain = re.sub(r'[#>*_\-]+', ' ', plain)
     plain = re.sub(r'\s+', ' ', plain).strip()
     return plain[:limit].rstrip() + ('…' if len(plain) > limit else '')

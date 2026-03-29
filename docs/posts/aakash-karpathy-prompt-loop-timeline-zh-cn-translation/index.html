@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aakash Gupta × Karpathy Loop / AutoResearch / Prompt Optimization —— 相关 X 时间线汇编（中文精翻）</title>
+  <link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body>
+  <div class="article">
+    <div class="topbar"><div class="brand"><a href="../../index.html">NotebookLM Sources</a></div></div>
+    <div class="article-wrap">
+      <div class="kicker">Published for NotebookLM · GitHub Pages</div>
+      <div class="note">Updated 2026-03-29 21:20 CST</div>
+      <div class="source-pill">Source: translate/aakash-karpathy-prompt-loop-timeline-zh-CN/translation.md</div>
+      <hr>
+      <article class="article-body article"><h1 id="aakash-gupta-karpathy-loop-autoresearch-prompt-optimization-x">Aakash Gupta × Karpathy Loop / AutoResearch / Prompt Optimization —— 相关 X 时间线汇编（中文精翻）</h1>
+<h2 id="_1">范围说明</h2>
+<p>这份文档汇总了我在 Aakash Gupta 时间线中能够直接核到、且与下列主题高度相关的 X 帖子：</p>
+<ul>
+<li>Karpathy 的 <strong>AutoResearch / Karpathy Loop</strong></li>
+<li>将这套循环从机器学习迁移到 <strong>Prompt Engineering（提示词工程）</strong></li>
+<li>用固定评测 + 逐轮变异，把提示词从“够用”推到“可靠”</li>
+<li>进一步展示这套优化架构如何超出 ML，落到更广泛的实际工作流里</li>
+</ul>
+<p>核查时间窗：<strong>2026-03-20 ～ 2026-03-29</strong>。</p>
+<hr />
+<h2 id="12026-03-20">1）2026-03-20 —— 最初的框架性推文</h2>
+<p><strong>作者：</strong> Aakash Gupta<br />
+<strong>链接：</strong> https://x.com/aakashgupta/status/2034851259442749909</p>
+<blockquote>
+<p>现在，你只要花 25 美元、用一块 GPU，就能在一夜之间跑完 100 组实验，而且这些实验根本不需要你逐个手工设计。</p>
+<p>Karpathy 开源了 AutoResearch。它一周内拿下 4.2 万个 GitHub star。Fortune 把它称为 “The Karpathy Loop”。</p>
+<p>几乎所有文章都只盯着它的机器学习一面，却错过了更大的故事：这套底层模式，适用于任何<strong>可以用数字打分</strong>的东西。广告文案、冷邮件、视频脚本、招聘文案、skill 文件，都可以。</p>
+<p>整个系统只有三个文件：一个让 agent 改；一个 agent 永远不能碰；一个由你写、用来给出优化方向。每一轮循环只要 5 分钟。分数涨了？<code>git commit</code>。分数跌了？<code>git reset</code>。一小时 12 轮，一夜 100 轮。</p>
+<p>Karpathy 把它用在一段自己已经手工优化了数月的代码上，agent 又找出了 20 个他漏掉的改进点，让速度再快 11%。Tobi Lutke 把它指向 Shopify 的 Liquid 模板引擎，经过 93 次自动提交后，渲染性能提升了 53%。</p>
+<p>我花了两周把这个系统拆开研究。今天这份指南会告诉你，怎样把它用到你每天真正会做的东西上：6 个使用场景、3 步搭建方法，以及那些会让实验在一开始就跑废的 eval（评测）错误。</p>
+<p>完整指南： https://aibyaakash.com/p/autoresearch-guide</p>
+</blockquote>
+<hr />
+<h2 id="22026-03-27-autoresearch-ml">2）2026-03-27 —— 外部信号：AutoResearch 的意义不止于 ML</h2>
+<p><strong>作者：</strong> David Ondrej<br />
+<strong>链接：</strong> https://x.com/DavidOndrej1/status/2037519926869585981</p>
+<blockquote>
+<p>AutoResearch 可能是 2026 年最重要的开源发布之一。</p>
+<p>因为它不只是“完成任务”，而是会<strong>评估自己的结果，并持续迭代，直到结果变得更好</strong>。</p>
+<p>但 99% 的人以为它只能用于机器学习。他们错了。</p>
+<p>完整拆解在这里：</p>
+</blockquote>
+<hr />
+<h2 id="32026-03-28-aakash">3）2026-03-28 —— Aakash 转发外部指南</h2>
+<p><strong>作者：</strong> Aakash Gupta<br />
+<strong>链接：</strong> https://x.com/aakashgupta/status/2037741009409605908</p>
+<blockquote>
+<p>你该开始狠狠地用 AutoResearch 了。这里有一份指南。</p>
+<p>来自 David Ondrej。</p>
+</blockquote>
+<hr />
+<h2 id="42026-03-28-ml">4）2026-03-28 —— 第一个明确的非 ML 例子：前端性能优化</h2>
+<p><strong>作者：</strong> Aakash Gupta<br />
+<strong>链接：</strong> https://x.com/aakashgupta/status/2037776197719834766</p>
+<blockquote>
+<p>有一次测试，把页面延迟从 1100ms 降到了 67ms。67 轮迭代，94% 的降幅。整个过程完全由 agent 在无人盯着的情况下完成。</p>
+<p>问题包括：阻塞渲染的 CSS、未优化的图片加载、阻塞首次绘制的字体加载。每一个修复都不大，但叠加起来，效果极其可观。</p>
+<p>这里的 eval 是计算机本来就会生成的数字：Lighthouse 分数、First Contentful Paint、Total Blocking Time、Cumulative Layout Shift。根本不需要人工打分，不涉及主观判断。数字下降了，就是优化成功；没降，就是没成功。</p>
+<p>这是最容易搭起来的一种 AutoResearch 形态。如果你的 CI 流水线本来就会产出一个数字，你今晚就能把这套循环指向它：测试通过率、API 响应时间、bundle 体积、内存占用……都行。一个文件负责变化，一个指标负责优化，然后就是 <code>git commit</code> 或 <code>git reset</code>。</p>
+<p>每个负责 Web 前端的 PM，待办列表里几乎都躺着性能优化，只是它总被更“紧急”的事情往后压。这套循环的意义在于：即使 backlog 一动不动，它也能自己跑起来。</p>
+<p>引用内容：</p>
+<p>Karpathy 的 AutoResearch 仓库已经有 4.2 万 star 了。大多数 PM 看完标题就关掉页面，因为他们以为这东西和自己没关系。</p>
+<p>我把它指向一个 Claude Code skill。睡一觉起来，4 轮之内，分数从 41% 提到了 92%。</p>
+<p>这里有 6 个使用场景、10 个 eval 模板，以及一个可下载工具包。</p>
+<p>https://news.aakashg.com/p/autoresearch-guide-for-pms</p>
+</blockquote>
+<hr />
+<h2 id="52026-03-29">5）2026-03-29 —— 目标推文：把这套循环用在提示词可靠性上</h2>
+<p><strong>作者：</strong> Aakash Gupta<br />
+<strong>链接：</strong> https://x.com/aakashgupta/status/2038146639303512255</p>
+<blockquote>
+<p>我把 Karpathy 的那套循环，应用到了每个使用 AI agent 的团队都会卡住的那个问题上：怎么把提示词从 <strong>80% 可靠</strong> 推到 <strong>95% 可靠</strong>。</p>
+<p>这套模式几乎是原样迁移的。一个文件负责变化，一个指标负责打分。agent 每一轮只改一个地方，测试它，保留赢家，撤销输家。一小时 12 轮，一夜 100 轮。</p>
+<p>你不再是在优化训练脚本，而是在优化任何会被反复使用的提示词或系统指令：客服 agent 的提示词、内部工作流自动化、数据抽取流水线、代码评审指令……凡是那种你曾认真写过、把它调到“差不多能用”以后，就因为手工迭代的边际收益越来越低而停下来的东西，都适用。</p>
+<p>整个设置只需要三样东西：</p>
+<ol>
+<li>你想改进的目标提示词；</li>
+<li>2～3 个真实测试输入，也就是在生产环境里真的会打到这个提示词的请求；</li>
+<li>3～6 个二元的是/否检查项，用来定义“质量”。</li>
+</ol>
+<p>例如：输出是否满足格式约束？是否遵循了那条特定指令？是否避开了你反复遇到的失败模式？</p>
+<p>整个循环是这样的：</p>
+<ul>
+<li>把提示词在所有测试输入上执行 30 次；</li>
+<li>用检查清单给每个输出打分；</li>
+<li>找出失败最频繁的那一项标准；</li>
+<li>只改提示词中的一个地方；</li>
+<li>再看分数有没有提高；</li>
+<li>提高了，就 <code>git commit</code>；</li>
+<li>没提高，就 <code>git reset</code>；</li>
+<li>重复，直到分数稳定超过 95%。</li>
+</ul>
+<p>你第二天醒来时会看到：</p>
+<ul>
+<li>改进后的提示词被单独保存，原始版本保持不动；</li>
+<li>一份 <code>results.log</code>，记录每一轮的分数；</li>
+<li>一份变更日志，说明哪些改动有效、哪些无效，以及为什么。</li>
+</ul>
+<p>Karpathy 带来的、可以超越 ML 迁移出去的那个洞见是：<strong>只要你能给它打分，你就能对它做 AutoResearch。</strong> 训练损失是分数，提示词输出质量的二元检查清单也是分数。这个循环根本不关心它在优化什么，它只需要一个会上下波动的数字。</p>
+<p>现在的提示词工程，看起来很像“还没有单元测试时代的软件开发”：手工微调、靠感觉评估、没有版本控制、没有系统化迭代。把 Karpathy Loop 用到提示词上之后，这件事就变成了一门真正的工程学科——每一轮改进都可以被衡量。</p>
+<p>所有在跑 AI agent 的团队，手里都有一些“差不多能用”的提示词。而“差不多能用”和“足够可靠”之间的那道缝，恰恰就是这套循环能在你睡觉时替你补上的。</p>
+<p>引用内容：</p>
+<p>现在，你只要花 25 美元、用一块 GPU，就能在一夜之间跑完 100 组实验，而且这些实验根本不需要你逐个手工设计。</p>
+<p>Karpathy 开源了 AutoResearch。它一周内拿下 4.2 万个 GitHub star。Fortune 把它称为 “The Karpathy Loop”。</p>
+<p>几乎所有文章都只盯着它的机器学习一面，却错过了……</p>
+</blockquote>
+<hr />
+<h2 id="62026-03-29">6）2026-03-29 —— 后续补充：把这套架构映射关系讲透</h2>
+<p><strong>作者：</strong> Aakash Gupta<br />
+<strong>链接：</strong> https://x.com/aakashgupta/status/2038132294817656978</p>
+<blockquote>
+<p>AutoResearch 之所以能在一周内拿下 4.2 万个 GitHub star，是因为这套架构能迁移到<strong>任何有分数的对象</strong>上。</p>
+<p>Karpathy 最初是把它用在机器学习训练上：<code>train.py</code> 是 agent 会改的代码；<code>val_bpb</code> 是度量指标；<code>program.md</code> 是人类提供的研究方向；<code>prepare.py</code> 是锁死的 eval harness（评测护栏）。分数变好就 <code>git commit</code>，变差就 <code>git reset</code>。</p>
+<p>我把它迁移到提示词工程上时，整个映射大概只花了十分钟，因为每个组件都有直接对应物：</p>
+<ul>
+<li><code>train.py</code> → 你的 skill 文件或 system prompt 文件；</li>
+<li><code>val_bpb</code> → 一个通过/失败检查清单，也就是对每个输出打 3～6 个是/否分；</li>
+<li><code>program.md</code> → 你写给 agent 的说明，告诉它该优化什么、必须遵守哪些约束；</li>
+<li><code>prepare.py</code> → 一个锁死的 eval 脚本，agent 可以先构建它，但之后永远不能再修改它；</li>
+<li>Git 的工作方式完全不变。</li>
+</ul>
+<p>之所以这套架构稳得住，是因为 Karpathy 做了一个几乎没人真正拿出来讨论的设计决定：他把系统清晰地拆成了四个角色——</p>
+<ol>
+<li>一个会变化的文件；</li>
+<li>一个负责裁判的指标；</li>
+<li>一个负责给方向的说明；</li>
+<li>一个负责上锁的约束。</li>
+</ol>
+<p>这四个角色，几乎描述了所有有效优化循环的共同结构：A/B 测试、临床试验、精益制造、PDCA，甚至科学方法本身。</p>
+<p>大多数 AI agent 框架失败，就是因为它们把这些边界混在了一起：写代码的 agent 同时也在评估代码；负责设定目标的系统同时也在衡量自己是否接近目标。AutoResearch 之所以有效，恰恰是因为<strong>负责变异文件的 agent，对“这个变异是怎么被打分的”没有任何控制权</strong>。</p>
+<p>把它迁到提示词工程之后，产出的结果和 Karpathy 在 ML 里得到的东西是一样的：</p>
+<ul>
+<li>一个单独保存的改进版本，原始文件保持不动；</li>
+<li>一份记录每轮分数的结果日志；</li>
+<li>一份变更日志，解释 agent 试了什么、什么有效、什么无效。</li>
+</ul>
+<p>大约一小时 12 轮，一夜 100 轮，算力成本大约 25 美元。</p>
+<p>大多数人最容易跳过、但也最关键的部分，就是那个<strong>锁死的 eval</strong>。没有它，agent 优化的就不是提示词，而是测试本身。</p>
+<p>只要你能为“什么叫好”定义出 3～6 个二元标准，你就可以把这套循环用到任何东西上：提示词、邮件序列、落地页文案、onboarding 流程、客服脚本。Karpathy Loop 本质上是一种<strong>伪装成 ML 工具的通用优化架构</strong>。</p>
+</blockquote>
+<hr />
+<h2 id="_2">时间线压缩总结</h2>
+<p>把这些帖子连起来看，这条时间线非常清晰：</p>
+<ol>
+<li><strong>3 月 20 日</strong> —— AutoResearch 被重新定义为一种普适的优化模式，而不只是 ML 小技巧。  </li>
+<li><strong>3 月 27～28 日</strong> —— 外部讨论开始放大这个判断：越来越多人意识到，大家严重低估了它；Aakash 也开始把它推向 PM 与非 ML 场景。  </li>
+<li><strong>3 月 28 日</strong> —— 第一个明确的非 ML 用例出现：用机器自动生成的指标去做前端性能优化。  </li>
+<li><strong>3 月 29 日</strong> —— 最关键的一跳发生了：这套循环被完整迁移到提示词工程和 AI agent 可靠性问题上。  </li>
+<li><strong>3 月 29 日（跟进帖）</strong> —— 这套方法被进一步形式化：<strong>可变文件、评分指标、指导方向、锁死约束</strong>，构成了它的最小通用架构。</li>
+</ol>
+<p>换句话说，这条时间线真正完成的，不只是“介绍一个工具”，而是把 <strong>Karpathy Loop</strong> 从一个看起来属于机器学习研究者的工作流，升级成了一种可以作用于<strong>任何反复执行的指令系统</strong>的通用方法论。</p>
+<hr />
+<h2 id="_3">一句话提炼</h2>
+<p><strong>这组推文真正推动的，不是一个更聪明的 agent，而是一种新的工作范式：把原本靠感觉手调的提示词、流程和脚本，变成可以被锁定评测、批量实验、自动迭代的工程对象。</strong></p></article>
+    </div>
+    <div class="footer">Static page generated from local content.</div>
+  </div>
+</body>
+</html>
