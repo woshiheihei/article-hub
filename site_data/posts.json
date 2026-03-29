@@ -41,6 +41,19 @@
     ]
   },
   {
+    "slug": "harness-design-long-running-apps-zh-cn",
+    "title": "面向长时应用开发的 harness 设计",
+    "source": "translate/harness-design-long-running-apps-zh-CN/translation.md",
+    "updated_at": "2026-03-29 21:50 CST",
+    "url": "./posts/harness-design-long-running-apps-zh-cn/index.html",
+    "excerpt": "Anthropic 工程团队 面向长时应用开发的 harness 设计 发布于 2026 年 3 月 24 日 在智能体式编程的前沿，harness（智能体编排框架）设计是决定性能的关键因素。下面这篇文章讲的是：我们如何把 Claude 在前端设计与长时自主软件工程上的能力继续往前推。 作者：Prithvi Rajasekaran，Anthropic Lab…",
+    "kind": "markdown",
+    "archived_files": [
+      "translation.md",
+      "harness-design-long-running-apps-zh-cn-long.png"
+    ]
+  },
+  {
     "slug": "aakash-karpathy-prompt-loop-timeline-zh-cn-translation",
     "title": "Aakash Gupta × Karpathy Loop / AutoResearch / Prompt Optimization —— 相关 X 时间线汇编（中文精翻）",
     "source": "output/html/aakash-karpathy-prompt-loop-timeline-zh-CN.html",

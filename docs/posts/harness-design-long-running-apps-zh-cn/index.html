@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>面向长时应用开发的 harness 设计</title>
+  <link rel="stylesheet" href="../../assets/style.css">
+</head>
+<body>
+  <div class="article">
+    <div class="topbar"><div class="brand"><a href="../../index.html">Article Hub</a></div></div>
+    <div class="article-wrap">
+      <div class="kicker">Versioned article · GitHub Pages</div>
+      <div class="note">Updated 2026-03-29 21:50 CST</div>
+      <div class="source-pill">Source: translate/harness-design-long-running-apps-zh-CN/translation.md</div>
+      <hr>
+      <article class="article-body article"><p>Anthropic 工程团队</p>
+<h1 id="harness">面向长时应用开发的 harness 设计</h1>
+<p>发布于 2026 年 3 月 24 日</p>
+<p>在智能体式编程的前沿，harness（智能体编排框架）设计是决定性能的关键因素。下面这篇文章讲的是：我们如何把 Claude 在前端设计与长时自主软件工程上的能力继续往前推。</p>
+<p>作者：Prithvi Rajasekaran，Anthropic Labs 团队成员。</p>
+<p>过去几个月里，我一直在处理两个彼此关联的问题：一是让 Claude 做出高质量的前端设计，二是让它在没有人工介入的情况下构建完整应用。这项工作起源于我们更早之前在前端设计 skill 和长时 coding agent harness 上的尝试。当时，我和同事们已经能通过 prompt engineering 与 harness 设计，把 Claude 的表现显著拉高到 baseline 之上——但这两条路最终都碰到了天花板。</p>
+<p>为了突破这个上限，我开始寻找能够同时适用于两种非常不同场景的新型 AI 工程方法：一种场景由主观审美定义，另一种场景则由可验证的正确性和可用性定义。受生成对抗网络（GANs）启发，我设计了一种由生成代理（generator）和评估代理（evaluator）组成的多代理结构。要让评估代理能稳定、而且“有品味”地给输出打分，第一步就是建立一套标准，把“这个设计好吗？”这种主观判断转换成具体、可评分的条目。</p>
+<p>接着，我把这些方法应用到了长时自主编程上，并继承了我们早期 harness 工作中的两个经验：第一，把构建过程拆成可处理的块；第二，用结构化工件在不同 session 之间完成上下文交接。最终形成的是一个由规划代理（planner）、生成代理和评估代理组成的三代理架构，它能够在持续数小时的自主编程 session 中产出丰富的全栈应用。</p>
+<h2 id="_1">为什么天真的实现方式会失效</h2>
+<p>我们之前已经展示过，harness（智能体编排框架）设计会显著影响长时智能体式编程的效果。在更早的一次实验里，我们使用一个初始化代理把产品规格拆解成任务列表，再由一个 coding agent 一次实现一个 feature，并在 session 之间通过交接工件传递上下文。更广泛的开发者社区也逐渐收敛到了类似的认识，例如像 “Ralph Wiggum” 这种方法，会利用 hooks 或脚本让代理持续处于迭代循环中。</p>
+<p>但仍有一些问题始终存在。任务一旦变得更复杂，代理随着时间推移仍然容易逐渐跑偏。拆解这个问题时，我们观察到执行这类任务的代理常见有两种失败模式。</p>
+<p>第一种是：随着上下文窗口被逐渐填满，模型在长任务上会开始失去连贯性（参见我们关于 context engineering 的文章）。有些模型还会表现出“上下文焦虑”（context anxiety，上下文焦虑：模型因为觉得上下文快到极限而提前收尾的倾向）：它们会在接近自己认为的上下文上限时，过早开始收尾。上下文重置（context reset）——也就是彻底清空上下文窗口，重新启动一个新的代理，同时通过结构化交接把前一个代理的状态和下一步计划传过去——能够同时解决这两个问题。</p>
+<p>这和 compaction（上下文压缩）不同。所谓 compaction，是把对话前面的内容就地总结压缩，让同一个代理在缩短后的历史上继续工作。压缩能保留连续性，但它不会给代理一个真正“干净的起点”，因此上下文焦虑仍可能存在。重置则提供了一个全新的上下文起点，但代价是交接工件必须携带足够多的状态，才能让下一个代理无缝接上工作。我们早期测试时发现，Claude Sonnet 4.5 的上下文焦虑足够明显，以至于单靠 compaction 并不足以支撑强长任务表现，因此上下文重置成了 harness 设计中的关键组成部分。它确实解决了核心问题，但也给每一次 harness 运行增加了编排复杂度、token 开销与延迟。</p>
+<p>第二个问题，是我们此前还没有真正处理过的：自我评估。当代理被要求评价自己做出的工作时，它往往会非常自信地夸奖自己——即便在人类看来，质量其实很普通。这个问题在设计这类主观任务上尤其明显，因为这里没有类似软件测试那样的二元验证标准。一个布局究竟是“精致”还是“平庸”，本来就带有判断色彩，而代理在给自己打分时会系统性地偏向正面。</p>
+<p>但即使是在那些确实存在可验证结果的任务上，代理在执行过程中也常常会表现出糟糕的判断力，从而拖累表现。把“做事的代理”和“判断工作的代理”分开，是解决这个问题的一个强杠杆。这种分离本身并不会立刻消除宽容倾向；评估代理依然是一个 LLM，也天然倾向于对 LLM 产出更宽松。但事实证明，把一个独立评估代理调成“更怀疑、更苛刻”，要比让生成代理对自己保持批判容易得多；一旦有了这种外部反馈，生成代理就有了明确可迭代的目标。</p>
+<h2 id="_2">前端设计：把主观质量变成可评分项</h2>
+<p>我最先在前端设计上做实验，因为自我评估问题在这里最明显。如果没有任何干预，Claude 通常会落到一种安全、可预期的布局上：技术上能用，但视觉上平平无奇。</p>
+<p>有两个洞见塑造了我为前端设计搭建的 harness。第一，审美虽然不能完全压缩成一个分数——而且个人品味本来就会不同——但我们仍然可以通过编码设计原则和偏好的评分标准，让结果更好。“这个设计美吗？”很难稳定回答，但“它是否遵循了我们对于好设计的原则？”就给了 Claude 一个更具体的打分依据。第二，把前端生成和前端评分分开之后，我们就能建立一个反馈循环，持续把生成代理往更强的方向推。</p>
+<p>基于这个想法，我写了四个评分标准，并在 prompt 中同时给到生成代理和评估代理：</p>
+<ul>
+<li>
+<p><strong>设计质量（Design quality）</strong>：设计是否给人一种统一整体的感觉，而不是零散部件的拼贴？在这一项上表现强，意味着颜色、字体、布局、图像与其他细节能共同营造出明确的氛围与身份感。</p>
+</li>
+<li>
+<p><strong>原创性（Originality）</strong>：能否看出有定制化决策，还是只是模板布局、组件库默认值和典型 AI 图案？一个人类设计师应该能识别出其中刻意的创意选择。未经修改的 stock 组件——或者那种典型 AI 生成痕迹，比如白卡片上盖一层紫色渐变——在这一项上都应该失败。</p>
+</li>
+<li>
+<p><strong>工艺（Craft）</strong>：技术执行质量，包括字体层级、间距一致性、色彩和谐、对比度等。这更像能力检查，而不是创意检查。大多数还算合理的实现默认都能过这一项；过不了，说明基础功有问题。</p>
+</li>
+<li>
+<p><strong>功能性（Functionality）</strong>：脱离审美，界面是否好用？用户是否能理解这个界面做什么，找到主要操作，并在不靠猜的情况下完成任务？</p>
+</li>
+</ul>
+<p>我刻意把“设计质量”和“原创性”的权重放得高于“工艺”和“功能性”。Claude 在工艺与功能性上默认就已经得分不低，因为这类技术能力本来就比较自然地出现在模型中。但在设计感和原创性上，Claude 经常只能给出顶多“不难看”的结果。这些评分标准会明确惩罚那类高度泛化的 “AI slop” 模式；而且通过提高设计与原创性的权重，它会迫使模型承担更多审美上的风险。</p>
+<p>我又用少量示例（few-shot examples）和详细分项打分对评估代理进行了校准。这样做能让评估代理的判断更贴近我的偏好，也能降低迭代之间的评分漂移。</p>
+<p>我用 Claude Agent SDK 构建了这个循环，因此编排本身相对直接。首先由生成代理根据用户 prompt 生成一个 HTML/CSS/JS 前端。我给评估代理接上了 Playwright MCP（Playwright MCP：让代理通过浏览器自动化实际操作页面的接口），这样它就可以在打分前直接操作真实页面，并对每个维度评分、输出详细批评意见。实际运行中，评估代理会自己导航页面、截图、仔细检查实现，然后再给出判断。这些反馈会回流给生成代理，作为下一轮迭代的输入。每次生成我通常会跑 5 到 15 轮；随着生成代理不断响应评估反馈，每一轮通常都会把结果往更鲜明的方向推进。因为评估代理并不是对一张静态截图评分，而是在主动操作页面，所以每一轮都需要真实的墙钟时间。完整运行最长能拉到 4 小时。我还让生成代理在每次评估后做一个策略决策：如果分数走势不错，就沿当前方向继续细化；如果方法不行，就直接转向另一种完全不同的美学方向。</p>
+<p>在多次运行中，评估代理的评分通常会随迭代先提升、后趋于平台期，而且仍然还有可继续提升的空间。有些生成是在原方向上渐进打磨；也有些则会在迭代中途发生非常剧烈的审美转向。</p>
+<p>评分标准的措辞会以我事先没有完全预料到的方式影响生成代理。例如，把“最好的设计应该达到 museum quality（博物馆级）”这类表述写进标准里，会把设计往某种特定的视觉收敛方向推过去，这说明标准本身携带的 prompt 信号，会直接塑造输出的气质。</p>
+<p>虽然分数总体上随着迭代提升，但这种模式并不总是干净的线性上升。后期实现整体上往往更好，但我也经常会遇到一种情况：我更喜欢中间某一轮，而不是最后一轮。实现复杂度通常也会随着轮次增加；生成代理会在响应评估反馈时不断尝试更雄心勃勃的方案。甚至在第一轮，结果就已经比“完全没有任何额外 prompting”的 baseline 明显更好，这说明评分标准和相关措辞本身，就已经能在任何评估反馈发生之前，把模型从泛化默认值上拉开。</p>
+<p>有一个很典型的例子：我让模型为一家荷兰艺术博物馆设计网站。到了第九轮时，它做出了一个干净、深色主题的虚构博物馆 landing page。页面本身已经相当精致，但整体仍然在我的预期范围内。结果到了第十轮，它彻底推翻了此前方案，把整个网站重构成一种空间体验：一个通过 CSS 透视渲染出来、带棋盘地板的 3D 房间；画作以自由排布的方式挂在墙上；房间之间的切换则通过“门洞”导航，而不是滚动或点击。这种创意上的跳跃，是我此前从单次生成中从未见过的。</p>
+<h2 id="_3">扩展到全栈编程</h2>
+<p>有了这些发现之后，我把这种受 GAN 启发的模式应用到了全栈开发上。生成—评估循环与软件开发生命周期天然匹配：代码评审和 QA，在结构上扮演的就是设计评估代理在前端实验里扮演的角色。</p>
+<h3 id="_4">架构</h3>
+<p>在我们更早的长时 harness 里，我们已经解决了“跨多个 session 保持编码连贯性”这个问题：当时的结构是，一个初始化代理，一个一次处理一个 feature 的 coding agent，以及 session 之间的上下文重置。上下文重置是那个 harness 的关键突破点：当时它运行在 Sonnet 4.5 上，而 Sonnet 4.5 就有前面提到的“上下文焦虑”倾向。设计出一个在上下文重置之间依然表现稳定的 harness，是让模型不跑偏的关键。到了 Opus 4.5，这种行为在很大程度上自行消失了，所以我在这个新 harness 里完全去掉了上下文重置。所有代理都在一个连续 session 里贯穿整个构建过程，上下文增长则由 Claude Agent SDK 的自动 compaction 处理。</p>
+<p>在这个版本里，我沿用了原始 harness 的基础，并构建了一个三代理系统；每个代理都对应我在以往运行中观察到的一个具体缺口。系统包括以下三种代理角色：</p>
+<p><strong>Planner（规划代理）</strong>：我们之前的长时 harness 需要用户一开始就提供一份很详细的 spec。我想把这一步也自动化，于是做了一个规划代理：它接收一个只有 1 到 4 句话的简单 prompt，再把它扩展成一份完整的产品规格。我在 prompt 里要求它在 scope 上保持雄心，同时聚焦于产品上下文与高层技术设计，而不要过早写进细粒度的技术实现细节。这样做是出于一个担忧：如果 planner 在一开始就把底层实现细节写得太死，而且还写错了，那么这些错误会一路传导到后续实现里。更聪明的做法，是约束代理最终要交付的东西，让它们在执行过程中自己找到路径。我还要求 planner 主动寻找把 AI 功能嵌进产品 spec 的机会。（文末 Appendix 里放了一个例子。）</p>
+<p><strong>Generator（生成代理）</strong>：我们之前“一次一个 feature”的方法，在 scope 管理上效果不错。这里我延续了类似模式，让生成代理按 sprint 工作，每个 sprint 从 spec 里拿一个 feature 来做。每个 sprint 都基于 React、Vite、FastAPI 和 SQLite（后来换成 PostgreSQL）实现应用；我还要求它在每个 sprint 结束时先对自己的工作做一次自评，再把结果交给 QA。它也拥有 git 用于版本控制。</p>
+<p><strong>Evaluator（评估代理）</strong>：早期 harness 产出的应用，经常乍看很惊艳，但一旦你真的去点、去用，里面还是会有很多真实 bug。为了抓这些问题，评估代理使用 Playwright MCP 以真实用户的方式点击和操作运行中的应用，测试 UI 功能、API endpoint 以及数据库状态。随后它会按照一套基于前端实验改造出来的标准，对每个 sprint 在产品深度、功能性、视觉设计和代码质量等维度上进行评分。每个维度都有硬阈值；只要有一个维度低于阈值，这个 sprint 就算失败，生成代理会收到非常详细的反馈，知道具体哪里出了问题。</p>
+<p>在每个 sprint 开始之前，生成代理和评估代理会先协商一个 <strong>sprint 合约（sprint contract）</strong>：也就是在还没写代码之前，先共同约定这一小段工作的“完成标准”到底是什么。之所以需要这一步，是因为产品 spec 本身被我刻意保持在高层抽象层面，我希望有一道桥，把 user story 和可测试的实现连接起来。生成代理先提出自己打算做什么、以及怎么验证“完成”；评估代理再审查这个提议，确认生成代理是在做正确的事情。两边会来回迭代，直到达成一致。</p>
+<p>它们之间的沟通是通过文件完成的：一个代理写文件，另一个代理读文件，再在这个文件里回应，或者另写一个新文件给前一个代理读。随后生成代理就按照双方确认的合约去构建，再把工作交给 QA。这样做的好处是：既能让工作忠实于 spec，又不会在太早阶段把实现方式规定得过细。</p>
+<h3 id="harness_1">运行这个 harness</h3>
+<p>这个 harness 的第一版我使用的是 Claude Opus 4.5，并把完整 harness 与单代理系统在同样用户 prompt 下做了对比。我之所以一开始选 Opus 4.5，是因为在我开始这些实验时，它还是我们最强的 coding 模型。</p>
+<p>我写给它的 prompt 是这样的，用来生成一个复古游戏制作器：</p>
+<blockquote>
+<p>Create a 2D retro game maker with features including a level editor, sprite editor, entity behaviors, and a playable test mode.</p>
+</blockquote>
+<p>下表展示了 harness 类型、运行时长以及总成本：</p>
+<table>
+<thead>
+<tr>
+<th>Harness</th>
+<th style="text-align: right;">Duration</th>
+<th style="text-align: right;">Cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Solo</td>
+<td style="text-align: right;">20 min</td>
+<td style="text-align: right;">$9</td>
+</tr>
+<tr>
+<td>Full harness</td>
+<td style="text-align: right;">6 hr</td>
+<td style="text-align: right;">$200</td>
+</tr>
+</tbody>
+</table>
+<p>完整 harness 的成本高出了 20 多倍，但输出质量上的差异也是立刻可见的。</p>
+<p>我原本预期的，是一个界面：我可以先构建关卡及其组成部分（sprite、entity、tile 布局），然后点击 play 真的玩这个关卡。我先打开了单代理运行（solo run）的结果，乍一看，这个应用似乎也大致符合预期。</p>
+<p>但随着我开始点进去使用，问题很快出现了。布局浪费空间，固定高度的面板让大部分视口都空在那里。工作流也很僵硬。我要填一个关卡时，界面会先要求我创建 sprite 和 entity，但 UI 本身并没有告诉我应该先这么做。更关键的是，真正的游戏是坏的：我的 entity 虽然出现在屏幕上，但对输入没有任何响应。继续读代码后我发现，entity 定义和游戏运行时之间的连接其实是断的，而界面上完全没有暴露这个问题到底出在哪里。</p>
+<p><em>（原文此处配有截图：Opening screen / Sprite editor / Game play）</em></p>
+<p>在评估完单代理运行之后，我把注意力转回了 harness 运行。这个版本从同样一句话 prompt 出发，但 planner 先把它扩展成了一份包含 16 个 feature、分布在 10 个 sprint 中的 spec。它做的东西明显比单代理版本多得多。除了核心编辑器和 play mode 之外，这份 spec 还要求加入 sprite 动画系统、行为模板、音效与音乐、AI 辅助 sprite 生成器和关卡设计器，以及可导出的、可分享链接的游戏。我还让 planner 可以读取我们的前端设计 skill，并把其中的设计语言要求写进应用 spec 里。对于每个 sprint，生成代理和评估代理都会先协商一份合约，规定这一轮的具体实现内容，以及将用来验证完成情况的可测试行为。</p>
+<p>这个应用一打开，就比单代理版本更精致、更顺畅。画布会占满整个视口，面板尺寸设置得更合理，整个界面也有一种稳定一致的视觉身份，并且和 spec 里的设计方向是连起来的。单代理版本里的某些笨拙之处依然存在——例如 workflow 仍然没有明确告诉你，应该先创建 sprite 和 entity，再尝试往关卡里填内容；这一点我还是得自己摸索出来。这更像是基础模型产品直觉上的缺口，而不是 harness 原本打算解决的问题，但它也提示了一个可继续在 harness 内部针对性改进的方向。</p>
+<p>进一步使用这些编辑器时，新版本相对于单代理版本的优势就更明显了。sprite editor 更丰富、功能更完整，工具栏更清晰，取色器更好用，缩放控制也更顺手。</p>
+<p>因为我要求 planner 把 AI 功能织入 spec，所以这个应用还内置了 Claude 集成，允许我通过 prompt 来生成游戏的不同部分。这显著加快了整个工作流。</p>
+<p><em>（原文此处配有截图：Opening screen / Sprite editor / AI game design / Game play）</em></p>
+<p>两者之间最大的差异出现在 play mode。这个版本里，我真的能移动我的 entity，真的能玩起这个游戏。物理效果仍然有一些粗糙之处——例如我的角色跳到平台上后，会与平台发生重叠，这种感觉在直觉上是“不对”的——但关键点在于：核心功能是工作的，而单代理版本没有做到。稍微玩了一会儿后，我也确实碰到了一些 AI 关卡构建上的限制。比如有一堵很高的墙，我没法跳过去，于是就被卡住了。这说明 harness 仍然可以继续吸纳一些常识层面的修正和边界条件处理，从而把应用进一步打磨好。</p>
+<p>回头阅读日志时，可以很明显看出评估代理是如何让实现持续贴着 spec 走的。每一个 sprint，它都会按 sprint 合约中的测试标准逐条检查，并通过 Playwright 实际操作运行中的应用，把所有偏离预期行为的地方都记成 bug。合约粒度很细——光 Sprint 3 就有 27 条标准覆盖 level editor——而评估代理给出的发现也足够具体，生成代理几乎不需要再做额外调查就能直接修复。下表给出了一些评估代理识别出来的具体问题：</p>
+<table>
+<thead>
+<tr>
+<th>合约标准</th>
+<th>评估代理发现</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Rectangle fill tool allows click-drag to fill a rectangular area with selected tile</td>
+<td><strong>FAIL</strong> —— 工具只会在拖拽起点和终点放 tile，而不会真正填满整个区域。<code>fillRectangle</code> 函数虽然存在，但没有在 <code>mouseUp</code> 时被正确触发。</td>
+</tr>
+<tr>
+<td>User can select and delete placed entity spawn points</td>
+<td><strong>FAIL</strong> —— <code>LevelEditor.tsx:892</code> 的 Delete 键处理要求同时满足 <code>selection</code> 和 <code>selectedEntityId</code>，但点击一个 entity 时只会设置 <code>selectedEntityId</code>。条件应该改成 <code>selection || (selectedEntityId &amp;&amp; activeLayer === 'entity')</code>。</td>
+</tr>
+<tr>
+<td>User can reorder animation frames via API</td>
+<td><strong>FAIL</strong> —— <code>PUT /frames/reorder</code> 路由定义在 <code>/{frame_id}</code> 路由之后。FastAPI 会先把 <code>reorder</code> 当成 <code>frame_id</code> 整数去匹配，然后返回 422：“unable to parse string as an integer”。</td>
+</tr>
+</tbody>
+</table>
+<p>要把评估代理调到这个水平，并不轻松。Claude 默认并不是一个好的 QA 代理。在最早的几次运行中，我常常看到它明明识别出了真实问题，结果又自己说服自己觉得“问题不大”，最后还是放行。它的测试也往往停留在表层，不太会主动探查边界条件，所以更细的 bug 往往会漏掉。我的调参循环，就是不断去读评估代理的日志，找出它和我判断不一致的例子，再回头更新 QA prompt，让它在这些地方更像我。这个开发循环我做了很多轮，评估代理才逐渐形成一种我认为还算合理的评分方式。即便如此，harness 输出仍然暴露出模型在 QA 能力上的边界：一些小的布局问题、某些地方显得反直觉的交互，以及更深层功能里没有被充分覆盖到的 bug。显然，继续调优还能挖出更多验证空间。但和单代理运行相比——后者连应用的中心功能都没法工作——这个提升已经非常明显。</p>
+<h3 id="harness_2">继续迭代 harness</h3>
+<p>第一批 harness 结果很鼓舞人，但它同时也又大、又慢、又贵。接下来最合理的动作，就是找到在不损失性能的前提下把 harness 简化的方法。这一方面是工程直觉，另一方面也对应一个更一般性的原则：harness 里的每个组件，都编码了某种“模型靠自己做不到这件事”的假设。而这些假设值得被不断压力测试——一方面因为它们可能本来就不成立，另一方面因为随着模型变强，它们会很快过时。我们在《Building Effective Agents》那篇博客里把这个原则表述为：“先找到尽可能简单的方案，只有在必要时才增加复杂度。”对于任何维护 agent harness 的人来说，这几乎都会成为一个反复出现的模式。</p>
+<p>我第一次尝试简化时，几乎是大刀阔斧地把 harness 砍掉了很多部分，同时也试了一些新的创意做法，但最终没能复现原始 harness 的性能。那之后，我也很难判断：到底哪些设计元素是真正承担关键作用的，以及它们到底在哪些方面起作用。基于这次经验，我转向了一种更系统的方法：每次只去掉一个组件，再观察它对最终结果的具体影响。</p>
+<p>当我做这些迭代时，Opus 4.6 也发布了，这进一步强化了我减少 harness 复杂度的动机。因为有充分理由相信，4.6 所需要的“外部脚手架”会比 4.5 少得多。正如我们在发布博客中写的那样：“[Opus 4.6] plans more carefully, sustains agentic tasks for longer, can operate more reliably in larger codebases, and has better code review and debugging skills to catch its own mistakes.” 它在长上下文检索上的能力也有显著提升。而这些能力，正是 harness 先前一直在努力补足的地方。</p>
+<h3 id="sprint">去掉 sprint 结构</h3>
+<p>我先做的事，是把 sprint 结构整个去掉。之所以一开始需要 sprint，是为了把工作拆成模型可以较连贯完成的小块。既然 Opus 4.6 已经有了明显增强，那么它原生就有可能处理这类分解工作，不再需要这种额外结构。</p>
+<p>我保留了 planner 和 evaluator，因为这两个组件仍然明显有价值。没有 planner 的话，生成代理会 under-scope：它会直接根据原始 prompt 开始动手，而不会先把事情 spec 清楚，结果就会产出一个比 planner 版本少很多 feature 的应用。</p>
+<p>在移除 sprint 结构后，我把 evaluator 改成了在整个构建结束时做一次统一评估，而不是按 sprint 逐轮打分。随着模型能力增强，evaluator 在不同任务里的“承重程度”也发生了变化：它是否值得保留，取决于具体任务相对于模型原生能力边界的位置。对于 4.5 而言，这个边界很近：我们的构建任务本来就处在生成代理 solo 能力的边缘，因此 evaluator 能在整个构建过程中抓出很多实质性问题。而到了 4.6，模型的原生能力提高了，边界自然向外移动。那些原本需要 evaluator 保证实现连贯性的任务，如今很多已经落入生成代理单独就能很好完成的范围；对这些任务来说，evaluator 就变成了额外开销。但对于那些仍然位于生成代理能力边缘的部分，evaluator 依旧能提供真实提升。</p>
+<p>实际含义是：evaluator 并不是一个固定的“要/不要”二元决策。只有当任务超出了当前模型 solo 稳定完成的边界时，它的成本才是值得的。</p>
+<p>在结构简化的同时，我还补充了一些 prompting，用来改善 harness 在每个应用中构建 AI feature 的方式，尤其是推动生成代理去构建一个真正可以通过工具驱动应用自身功能的 agent。这也花了不少迭代，因为相关知识太新，Claude 的训练数据对此覆盖还不够深。但经过足够多的调优之后，生成代理确实开始能把 agent 正确搭起来。</p>
+<h3 id="harness_3">更新后 harness 的结果</h3>
+<p>为了测试更新后的 harness，我用下面这个 prompt 让它生成一个 DAW（Digital Audio Workstation，数字音频工作站）：也就是一个在浏览器中用于作曲、录音和混音的音乐制作程序：</p>
+<blockquote>
+<p>Build a fully featured DAW in the browser using the Web Audio API.</p>
+</blockquote>
+<p>这次运行依然很长、也很贵：大约 4 小时，token 成本约为 124 美元。</p>
+<p>大部分时间都花在 builder 上；在没有 sprint 分解的情况下，它依然能连贯地工作 2 个多小时，而这一点正是 Opus 4.5 当年做不到的。</p>
+<table>
+<thead>
+<tr>
+<th>Agent &amp; Phase</th>
+<th style="text-align: right;">Duration</th>
+<th style="text-align: right;">Cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Planner</td>
+<td style="text-align: right;">4.7 min</td>
+<td style="text-align: right;">$0.46</td>
+</tr>
+<tr>
+<td>Build (Round 1)</td>
+<td style="text-align: right;">2 hr 7 min</td>
+<td style="text-align: right;">$71.08</td>
+</tr>
+<tr>
+<td>QA (Round 1)</td>
+<td style="text-align: right;">8.8 min</td>
+<td style="text-align: right;">$3.24</td>
+</tr>
+<tr>
+<td>Build (Round 2)</td>
+<td style="text-align: right;">1 hr 2 min</td>
+<td style="text-align: right;">$36.89</td>
+</tr>
+<tr>
+<td>QA (Round 2)</td>
+<td style="text-align: right;">6.8 min</td>
+<td style="text-align: right;">$3.09</td>
+</tr>
+<tr>
+<td>Build (Round 3)</td>
+<td style="text-align: right;">10.9 min</td>
+<td style="text-align: right;">$5.88</td>
+</tr>
+<tr>
+<td>QA (Round 3)</td>
+<td style="text-align: right;">9.6 min</td>
+<td style="text-align: right;">$4.06</td>
+</tr>
+<tr>
+<td><strong>Total V2 Harness</strong></td>
+<td style="text-align: right;"><strong>3 hr 50 min</strong></td>
+<td style="text-align: right;"><strong>$124.70</strong></td>
+</tr>
+</tbody>
+</table>
+<p>和前一个 harness 一样，planner 会把这一句 prompt 扩展成完整 spec。从日志里可以看出，生成代理在规划应用与 agent 设计、把 agent 接起来、并在交给 QA 之前自己测试这件事上，都做得不错。</p>
+<p>不过，QA 代理仍然抓到了真实的缺口。它在第一轮反馈中写道：</p>
+<blockquote>
+<p>这是一个很强的应用：设计完成度很高，AI agent 很扎实，后端也不错。主要失败点在于 Feature Completeness（功能完整性）——这个应用虽然看起来很惊艳，AI 集成也工作良好，但若干 DAW 核心功能仍然只是“展示层面”的：clip 不能在时间线里拖拽/移动，没有 instrument UI 面板（例如 synth knobs、drum pads），也没有可视化 effect editor（例如 EQ 曲线、压缩器表头）。这些并不是边缘功能，而是决定 DAW 是否真的可用的核心交互；而且 spec 里明确要求了这些部分。 |</p>
+</blockquote>
+<p>第二轮反馈中，它又指出了几项依旧存在的功能缺口：</p>
+<ul>
+<li>Audio recording 依旧只是 stub：按钮会切换状态，但没有真正的麦克风采集</li>
+<li>还没有实现通过拖拽边缘来 resize clip，也没有实现 clip split</li>
+<li>效果器的可视化仍然只是数字滑杆，而不是真正的图形界面（例如没有 EQ 曲线）</li>
+</ul>
+<p>这说明：即便生成代理已经强很多，只靠它自己时仍然会漏细节，或者把功能先 stub 出来但没有做实；而 QA 仍然能通过抓这些“最后一公里”的问题，给生成代理带来实际提升。</p>
+<p>按照这个 prompt，我原本期待的是一个程序：我可以在里面创建旋律、和声、鼓组 pattern，把它们排成一首歌，并且在整个过程中能得到一个内置 agent 的帮助。原文视频展示了最终结果。</p>
+<p>这个应用离专业音乐制作软件当然还很远，agent 在歌曲创作上的能力也显然还有很多可改进的空间。此外，Claude 并不能真正“听见”声音，这也使得围绕音乐品味做 QA 的反馈闭环没那么有效。</p>
+<p>但最终应用已经具备了功能性音乐制作程序最核心的几块：浏览器中的 arrangement view、mixer 与 transport 都是工作的。更进一步，我甚至可以完全通过 prompt 来拼出一段短歌：agent 会设定 tempo 和 key，铺出旋律，生成鼓轨，调整 mixer 电平，并加入 reverb。歌曲创作所需的基本原语已经具备，而这个 agent 也能通过工具自主驱动这些原语，从头到尾完成一个简单制作。还远谈不上完美——但它已经明显在逼近了。## 接下来会怎样</p>
+<p>随着模型持续进步，我们大体可以预期：它们能连续工作更久，也能处理更复杂的任务。在某些情况下，这意味着围绕模型搭建的脚手架会随着时间推移变得没那么重要，开发者完全可以等下一代模型发布，让某些问题“自己消失”。但另一方面，模型越强，反而越会打开空间，让人们去设计新的 harness，使其完成那些 baseline 模型本来做不到的复杂任务。</p>
+<p>基于这一点，这项工作里有几个值得延续的经验。第一，围绕你所依赖的模型做实验、阅读它在真实问题上的 traces、并针对你想要的结果去调优其表现，永远都是好习惯。第二，在处理更复杂任务时，把任务拆开，再让专门的代理分别处理问题的不同方面，有时确实能榨出额外提升空间。第三，当新模型到来时，通常都应该重新审视你的 harness：把那些已经不再承担关键作用的部分剥掉，再加入新的结构，以获得过去做不到的更高能力。</p>
+<p>经过这项工作，我形成了一个更强的判断：随着模型持续变强，那些有意思的 harness 组合空间并不会缩小。它只是在移动；而对 AI 工程师来说，真正有意思的工作，就是不断找到下一种新的组合方式。</p>
+<h2 id="_5">致谢</h2>
+<p>特别感谢 Mike Krieger、Michael Agaby、Justin Young、Jeremy Hadfield、David Hershey、Julius Tarng、Xiaoyi Zhang、Barry Zhang、Orowa Sidker、Michael Tingley、Ibrahim Madha、Martina Long 和 Canyon Robbins 对这项工作的贡献。</p>
+<p>也感谢 Jake Eaton、Alyssa Leonard 和 Stef Sequeira 在这篇文章成稿过程中提供的帮助。</p>
+<h2 id="_6">附录</h2>
+<p>下面给出的是规划代理生成的一个示例计划。</p>
+<p><strong>RetroForge —— 2D 复古游戏制作器</strong></p>
+<h3 id="overview">Overview</h3>
+<p>RetroForge 是一个基于 Web 的创作工作室，面向 2D 复古风格游戏的设计与构建。它把经典 8-bit / 16-bit 游戏美学的怀旧感，与现代、直观的编辑工具结合起来，让从业余爱好者到独立开发者都能在不编写传统代码的情况下，把自己的游戏想法做出来。</p>
+<p>该平台提供四个集成式创作模块：</p>
+<ul>
+<li>一个基于 tile 的 <strong>Level Editor</strong>，用于设计游戏世界</li>
+<li>一个像素风 <strong>Sprite Editor</strong>，用于制作视觉资产</li>
+<li>一个可视化的 <strong>Entity Behavior</strong> 系统，用于定义游戏逻辑</li>
+<li>一个即时的 <strong>Playable Test Mode</strong>，用于实时测试玩法</li>
+</ul>
+<p>同时，它还把 AI 辅助（由 Claude 驱动）贯穿整个流程，帮助用户通过自然语言交互来生成 sprite、设计关卡、配置行为逻辑，从而加快创作过程。</p>
+<p>RetroForge 面向那些热爱复古游戏美学、但又希望拥有现代便利性的创作者。无论是想复刻童年时代的 platformer、RPG 或动作游戏，还是想在复古约束下发明全新的体验，用户都可以快速原型化、用可视化方式反复迭代，并把自己的作品分享出去。</p>
+<h3 id="features">Features</h3>
+<h4 id="1-project-dashboard-management">1. Project Dashboard &amp; Management</h4>
+<p>Project Dashboard 是 RetroForge 中所有创作工作的主入口。用户需要一个清晰、有组织的方式来管理自己的游戏项目：能够新建项目、回到尚未完成的作品，并在一眼之间理解每个项目里大致包含什么。</p>
+<p><strong>User Stories：作为一个用户，我希望能够：</strong></p>
+<ul>
+<li>新建一个游戏项目，并给它命名和填写描述，以便开始设计我的游戏</li>
+<li>以可视卡片的方式看到我所有已有的项目，并显示项目名称、最近修改日期与缩略图预览，以便我快速找到并继续之前的工作</li>
+<li>打开任意项目，进入完整的游戏编辑工作区，以便继续创作</li>
+<li>删除不再需要的项目，并在删除前弹出确认对话框以防误操作，从而保持工作区整洁</li>
+<li>复制一个已有项目，作为新游戏的起点，以便复用此前的工作</li>
+</ul>
+<p><strong>Project Data Model：每个项目包含：</strong></p>
+<ul>
+<li>项目元数据（名称、描述、创建/修改时间戳）</li>
+<li>画布设置（例如 256x224、320x240 或 160x144 的分辨率）</li>
+<li>Tile 大小配置（8x8、16x16 或 32x32 像素）</li>
+<li>配色方案选择</li>
+<li>所有关联的 sprite、tileset、level 和 entity 定义</li>
+</ul>
+<p>……</p>
+<p>Copy</p>
+<h2 id="_7">获取开发者通讯</h2>
+<p>产品更新、实践指南、社区案例等内容，每月发送一次到你的邮箱。</p>
+<p>如果你希望收到我们的月度开发者通讯，请提供你的邮箱地址。你可以随时取消订阅。</p></article>
+    </div>
+    <div class="footer">Static page generated from local content.</div>
+  </div>
+</body>
+</html>

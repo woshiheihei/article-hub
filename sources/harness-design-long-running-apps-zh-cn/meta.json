@@ -1,0 +1,10 @@
+{
+  "title": "面向长时应用开发的 harness 设计",
+  "kind": "markdown",
+  "source": "translate/harness-design-long-running-apps-zh-CN/translation.md",
+  "updated_at": "2026-03-29 21:50 CST",
+  "files": [
+    "translation.md",
+    "harness-design-long-running-apps-zh-cn-long.png"
+  ]
+}
