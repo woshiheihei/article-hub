@@ -1,5 +1,20 @@
 [
   {
+    "slug": "aakash-prompt-loop-discussion-enriched-zh-cn",
+    "title": "Aakash Gupta：把 Karpathy Loop 用到提示词可靠性上",
+    "source": "output/html/aakash-prompt-loop-discussion-enriched-zh-CN-v3.html",
+    "updated_at": "2026-03-29 21:50 CST",
+    "url": "./posts/aakash-prompt-loop-discussion-enriched-zh-cn/index.html",
+    "excerpt": "Aakash Gupta：把 Karpathy Loop 用到提示词可靠性上 :root{ bg: f5f7fa; paper: fbfcfe; ink: 1f2937; muted: 5f6b7a; soft: 8a94a3; line: d8e0ea; accent: 3d5a80; accent soft:rgba(61,90,128,.08);} {…",
+    "kind": "html",
+    "archived_files": [
+      "aakash-prompt-loop-discussion-enriched-zh-CN-v3.html",
+      "delivery.md",
+      "translation.md",
+      "aakash-prompt-loop-discussion-enriched-zh-CN-v3.png"
+    ]
+  },
+  {
     "slug": "aakash-karpathy-prompt-loop-timeline-zh-cn-translation",
     "title": "Aakash Gupta × Karpathy Loop / AutoResearch / Prompt Optimization —— 相关 X 时间线汇编（中文精翻）",
     "source": "output/html/aakash-karpathy-prompt-loop-timeline-zh-CN.html",
