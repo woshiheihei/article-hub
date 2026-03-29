@@ -1,5 +1,19 @@
 [
   {
+    "slug": "karpathy-llm-memory-dossier-zh-cn",
+    "title": "Karpathy：LLM 的个性化记忆，为什么会让人觉得被“用力过猛地理解”",
+    "source": "deliverables/x-thread-memory-dossier-2026-03-29/output.html",
+    "updated_at": "2026-03-29 22:29 CST",
+    "url": "./posts/karpathy-llm-memory-dossier-zh-cn/index.html",
+    "excerpt": "Karpathy：LLM 的个性化记忆，为什么会让人觉得被“用力过猛地理解” :root{ bg: f5f7fa; paper: fbfcfe; ink: 1f2937; muted: 5f6b7a; soft: 8a94a3; line: d8e0ea; accent: 3d5a80;} {box sizing:border box} html,body{…",
+    "kind": "html",
+    "archived_files": [
+      "output.html",
+      "delivery.md",
+      "output.png"
+    ]
+  },
+  {
     "slug": "aakash-prompt-loop-discussion-enriched-zh-cn",
     "title": "Aakash Gupta：把 Karpathy Loop 用到提示词可靠性上",
     "source": "output/html/aakash-prompt-loop-discussion-enriched-zh-CN-v3.html",
