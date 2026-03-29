@@ -15,6 +15,19 @@
     ]
   },
   {
+    "slug": "claude-code-auto-mode-zh-cn",
+    "title": "Claude Code 自动模式：一种更安全的跳过权限方式",
+    "source": "translate/claude-code-auto-mode-zh-CN/translation.md",
+    "updated_at": "2026-03-29 21:50 CST",
+    "url": "./posts/claude-code-auto-mode-zh-cn/index.html",
+    "excerpt": "Claude Code 自动模式：一种更安全的跳过权限方式 Claude Code 用户会批准 93% 的权限提示。我们构建了一套分类器来自动处理其中一部分决策，在减少审批疲劳的同时提升安全性。本文会介绍它能拦下什么，又会漏掉什么。 默认情况下，Claude Code 在运行命令或修改文件之前都会向用户请求批准。这样做能保障用户安全，但也意味着用户需要频繁点…",
+    "kind": "markdown",
+    "archived_files": [
+      "translation.md",
+      "claude-code-auto-mode-long.png"
+    ]
+  },
+  {
     "slug": "aakash-karpathy-prompt-loop-timeline-zh-cn-translation",
     "title": "Aakash Gupta × Karpathy Loop / AutoResearch / Prompt Optimization —— 相关 X 时间线汇编（中文精翻）",
     "source": "output/html/aakash-karpathy-prompt-loop-timeline-zh-CN.html",
