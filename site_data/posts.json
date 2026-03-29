@@ -1,5 +1,14 @@
 [
   {
+    "slug": "output-html-x-thread-dossier-2037200624450936940",
+    "title": "Karpathy × Patrick Collison × Aakash Gupta",
+    "source": "output/html/x-thread-dossier-2037200624450936940.html",
+    "updated_at": "2026-03-29 21:27 CST",
+    "url": "./posts/output-html-x-thread-dossier-2037200624450936940/index.html",
+    "excerpt": "Karpathy × Patrick Collison × Aakash Gupta :root{ bg: f5f7fa; paper: fbfcfe; ink: 1f2937; muted: 5f6b7a; soft: 8a94a3; line: d8e0ea; accent: 3d5a80;} {box sizing:border box} html,b…",
+    "kind": "html"
+  },
+  {
     "slug": "aakash-karpathy-prompt-loop-timeline-zh-cn-translation",
     "title": "Aakash Gupta × Karpathy Loop / AutoResearch / Prompt Optimization —— 相关 X 时间线汇编（中文精翻）",
     "source": "translate/aakash-karpathy-prompt-loop-timeline-zh-CN/translation.md",

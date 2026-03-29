@@ -5,6 +5,7 @@ Public GitHub Pages site for publishing Markdown and image artifacts as clean st
 ## What this is for
 
 - Turn local `.md` files into public single-page HTML documents
+- Publish hand-tuned local `.html` files directly as public static pages
 - Turn local images into simple public viewer pages
 - Produce stable public URLs that can be pasted into NotebookLM as web sources
 

@@ -19,6 +19,7 @@ import markdown as md
 
 IMAGE_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif', '.bmp', '.tif', '.tiff'}
 MARKDOWN_EXTS = {'.md', '.markdown'}
+HTML_EXTS = {'.html', '.htm'}
 GENERIC_STEMS = {'translation', 'delivery', 'readme', 'index', 'notes', 'note'}
 
 
@@ -110,14 +111,25 @@ def copy_local_assets(text: str, source_dir: Path, assets_dir: Path) -> str:
     return text
 
 
+def resolve_local_target(clean: str, source_dir: Path) -> Path | None:
+    if re.match(r'^(https?:|data:|#|mailto:|tel:)', clean, re.IGNORECASE):
+        return None
+    if clean.startswith('file://'):
+        try:
+            return Path(clean[7:]).expanduser().resolve()
+        except Exception:
+            return None
+    if clean.startswith('/'):
+        candidate = Path(clean).expanduser().resolve()
+        return candidate if candidate.exists() else None
+    candidate = (source_dir / clean).expanduser().resolve()
+    return candidate if candidate.exists() else None
+
+
 def rewrite_target(target: str, source_dir: Path, assets_dir: Path) -> str:
     clean = target.split(' ')[0].strip()
-    if re.match(r'^(https?:|data:|#)', clean, re.IGNORECASE):
-        return target
-    if clean.startswith('/'):
-        return target
-    source = (source_dir / clean).resolve()
-    if not source.exists() or not source.is_file():
+    source = resolve_local_target(clean, source_dir)
+    if source is None or not source.is_file():
         return target
     name = source.name
     dest = assets_dir / name
@@ -136,6 +148,34 @@ def render_markdown_html(text: str) -> str:
     renderer = md.Markdown(extensions=['extra', 'fenced_code', 'tables', 'toc', 'sane_lists'])
     html_body = renderer.convert(text)
     return html_body
+
+
+def rewrite_html_assets(html_text: str, source_dir: Path, assets_dir: Path) -> str:
+    ensure_dir(assets_dir)
+
+    def replace_attr(match: re.Match[str]) -> str:
+        before, target, after = match.group(1), match.group(2).strip(), match.group(3)
+        new_target = rewrite_target(target, source_dir, assets_dir)
+        return f'{before}{new_target}{after}'
+
+    def replace_css_url(match: re.Match[str]) -> str:
+        quote, target = match.group(1) or '', match.group(2).strip()
+        new_target = rewrite_target(target, source_dir, assets_dir)
+        return f'url({quote}{new_target}{quote})'
+
+    html_text = re.sub(r'((?:src|href)=["\'])([^"\']+)(["\'])', replace_attr, html_text, flags=re.IGNORECASE)
+    html_text = re.sub(r'url\((?:(["\']))?([^"\')]+)(?:\1)?\)', replace_css_url, html_text, flags=re.IGNORECASE)
+    return html_text
+
+
+def title_from_html(html_text: str, fallback: str) -> str:
+    m = re.search(r'<title>(.*?)</title>', html_text, re.IGNORECASE | re.DOTALL)
+    if m:
+        return re.sub(r'\s+', ' ', m.group(1)).strip() or fallback
+    m = re.search(r'<h1[^>]*>(.*?)</h1>', html_text, re.IGNORECASE | re.DOTALL)
+    if m:
+        return re.sub(r'<[^>]+>', '', m.group(1)).strip() or fallback
+    return fallback
 
 
 def excerpt_from_text(text: str, limit: int = 180) -> str:
@@ -308,6 +348,12 @@ def main() -> None:
         page_html = image_page(title, source.name, source_display, now)
         excerpt = 'Image artifact published as a simple static page.'
         kind = 'image'
+    elif source.suffix.lower() in HTML_EXTS:
+        raw_html = read_text(source)
+        title = args.title or title_from_html(raw_html, source.stem)
+        page_html = rewrite_html_assets(raw_html, source.parent, assets_dir)
+        excerpt = excerpt_from_text(re.sub(r'<[^>]+>', ' ', raw_html))
+        kind = 'html'
     else:
         raise SystemExit(f'unsupported source type: {source.suffix}')
 
